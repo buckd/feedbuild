@@ -89,9 +89,6 @@ def main(args):
 
     feed.list_packages()
 
-    feed.remove_package('ni-system-monitor-veristand-2019-support')
-    feed.list_packages()
-
 
 if __name__ == "__main__":
     import sys
