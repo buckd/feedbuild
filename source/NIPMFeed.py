@@ -4,30 +4,62 @@ from shutil import copyfile
 import re
 
 class NIPMFeed:
+    """
+    This is a class for creating/updating NIPM feeds.
+    """
 
-    DEFAULT_NIPKG_LOCATION = 'C:/Program Files/National Instruments/NI Package Manager/nipkg.exe'
-    
-    def __init__(self, feed_path, nipkg_path = None):
+    _DEFAULT_NIPKG_LOCATION = 'C:/Program Files/National Instruments/NI Package Manager/nipkg.exe'
+
+    def __init__(self, feed_path, nipkg_path = _DEFAULT_NIPKG_LOCATION):
+        """
+        Constructor for NIPMFeed class.
+
+        :param feed_path: Path to NIPM feed.
+        :param nipkg_path: Location of nipkg.exe. Defaults to NIPM default install location.
+        """
+
         self.feed_path = feed_path
-        self.nipkg_path = nipkg_path if nipkg_path else self.DEFAULT_NIPKG_LOCATION
+        self.nipkg_path = nipkg_path
+
+
+    def create(self):
+        """
+        Creates a new feed.
+        """
+
+        subprocess.check_call([self.nipkg_path, "feed-create", self.feed_path])
 
 
     def open(self, create_if_necessary = False):
-        if os.path.isdir(self.feed_path):
+        """
+        Opens an existing feed or optionally creates a new feed.
+
+        :param create_if_necessary: Creates a new feed if one does not exist. Defaults to False.
+        """
+
+        if os.path.exists(os.path.join(self.feed_path, "Packages")):
             return
 
         if not create_if_necessary:
             raise ValueError('Feed not found.')
 
         os.makedirs(self.feed_path)
-
-        subprocess.check_call([self.nipkg_path, "feed-create", self.feed_path])
+        self.create()
 
 
     def add_package(self, package_source, package_destination = None, create_package_destination = False, overwrite_existing = False):
+        """
+        Adds a package to the feed, optionally copying package to a new destination before adding.
+
+        :param package_source: Path to the package to be added.
+        :param package_destination: Path where package will be copied before adding to feed. If not provided, the package is added directly from package_source.
+        :param create_package_destination: Specifies whether to create the directories of package_destination if they don't exist. Default is False.
+        :param overwrite_existing: Specifies whether to overwrite the file at package_destination if it already exists. Default is False.
+        """
+
         if not os.path.exists(package_source):
             raise ValueError('{0} does not exist.'.format(package_source))
-        if not os.path.splitext(package_source)[1] == '.nipkg':
+        if not package_source.endswith('.nipkg'):
             raise ValueError('{0} is not a valid nipkg file'.format(package_source))
 
         package_to_add = package_source
@@ -47,6 +79,12 @@ class NIPMFeed:
 
 
     def remove_package(self, package_name):
+        """
+        Removes a package from the feed.
+
+        :param package_name: The name of the package to be removed.
+        """
+
         package_path = self._find_package_path(package_name)
         if not package_path:
             raise ValueError('Package name {0} does not exist in the feed.'.format(package_name))
@@ -55,12 +93,22 @@ class NIPMFeed:
 
 
     def list_packages(self):
-        print("Packages in feed:\n")
+        """
+        Prints a list of all package paths that exist in the feed. Package paths are relative to feed path.
+        """
+
+        print("\nPackages in feed:")
         for package_path in self._get_package_list():
             print(os.path.normpath(package_path))
 
 
     def _get_package_list(self):
+        """
+        Returns a list of all package paths that exist in the feed.
+
+        :return The paths of all packages in the feed relative to the feed path.
+        """
+
         packages = []
         with open(os.path.join(self.feed_path, "Packages.stamps")) as f:
             for line in f:
@@ -70,6 +118,13 @@ class NIPMFeed:
 
 
     def _find_package_path(self, package_name):
+        """
+        Finds the path of the provided package located in the feed.
+
+        :param package_name: The name of the package to locate.
+        :return The path of the package relative to the feed path.
+        """
+
         for package_path in self._get_package_list():
             base_path, package_base_name = os.path.split(package_path)
             package, extension = os.path.splitext(package_base_name)
