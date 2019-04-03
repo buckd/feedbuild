@@ -1,5 +1,6 @@
 import argparse
 import glob
+import json
 import os
 import re
 from NIPMFeed import NIPMFeed
@@ -7,36 +8,6 @@ from NIPMFeed import NIPMFeed
 ALL_EXCLUSIONS = []
 RELEASE_EXCLUSIONS = ['ni_system_monitor_custom_device']
 TEST_EXCLUSIONS = []
-
-def get_latest_installers(directory, compiler, version, feed_type):
-    """
-    Returns the most recent nipkg installers.
-
-    :param directory: The base directory for all nipkg files.
-    :param compiler: The compiler version used to build the nipkg.
-    :param version: The release version for the nipkg.
-    :param feed_type: The type of feed to build.
-    :return: A list of the latest nipkg installers matching the compiler and version parameters.
-    """
-
-    exclusions = ALL_EXCLUSIONS
-
-    if feed_type == 'release':
-        exclusions = exclusions + RELEASE_EXCLUSIONS
-    elif feed_type == 'test':
-        exclusions = exclusions + TEST_EXCLUSIONS
-
-    base_path = os.path.join(directory, '*')
-
-    installers = []
-    for sub_dir in glob.glob(base_path):
-        if os.path.split(sub_dir)[1] not in exclusions:
-            latest_path = find_latest_directory(os.path.join(sub_dir, 'export/release/{0}'.format(version)))
-            packages = glob.glob(os.path.join(latest_path, '{0}/installer/*.nipkg'.format(compiler)))
-            if packages:
-                # there should only be 1 package
-                installers.append(packages[0])
-    return installers
 
 
 def build_final_feed_path(feed_path, feed_version):
@@ -64,10 +35,81 @@ def build_final_feed_path(feed_path, feed_version):
 
 
 def find_latest_directory(base_path):
+    """
+    Returns the directory in base path that was last modified.
+    
+    :param base_path: The path to search.
+    :return The directory that was last modified.
+    """
+
     sub_dirs = glob.glob(os.path.join(base_path, '*'))
     if not sub_dirs:
         return None
     return max(sub_dirs, key=os.path.getmtime)
+
+
+def get_installer_packages(installer_dirs):
+    installers = []
+    for dir in installer_dirs:
+        packages = glob.glob(os.path.join(dir, '*.nipkg'))
+        if packages:
+            #there should only be 1 package
+            installers.append(packages[0])
+    return installers
+
+
+def get_installer_manifests(installer_dirs):
+    manifests = []
+    for dir in installer_dirs:
+        manifest = os.path.join(dir, 'manifest.json')
+        if os.path.exists(manifest):
+            manifests.append(manifest)
+    return manifests
+
+
+def get_latest_installer_directories(directory, compiler, version, feed_type):
+    """
+    Returns the most recent path to installer directories.
+
+    :param directory: The base directory for all nipkg files.
+    :param compiler: The compiler version used to build the nipkg.
+    :param version: The release version for the nipkg.
+    :param feed_type: The type of feed to build.
+    :return: A list of the latest installer directories matching the compiler and version parameters.
+    """
+
+    exclusions = ALL_EXCLUSIONS
+
+    if feed_type == 'release':
+        exclusions = exclusions + RELEASE_EXCLUSIONS
+    elif feed_type == 'test':
+        exclusions = exclusions + TEST_EXCLUSIONS
+
+    base_path = os.path.join(directory, '*')
+
+    directories = []
+    for sub_dir in glob.glob(base_path):
+        if os.path.split(sub_dir)[1] not in exclusions:
+            latest_path = find_latest_directory(os.path.join(sub_dir, 'export/release/{0}'.format(version)))
+            dir = os.path.join(latest_path, '{0}/installer'.format(compiler))
+            if dir:
+                directories.append(dir)
+    return directories
+
+
+def generate_feed_metadata(feed_path, dirs):
+    metadata = []
+    manifests = get_installer_manifests(dirs)
+    for manifest in manifests:
+        if os.path.exists(manifest):
+            with open(manifest) as json_file:
+                data = json.load(json_file)
+                metadata.append(data)
+
+    metadata_path = os.path.join(feed_path, 'meta-data/metadata.json')
+    os.mkdir(os.path.join(feed_path, 'meta-data'))
+    with open(metadata_path, 'w') as outfile:
+        json.dump(metadata, outfile, indent=3)
 
 
 def parse_options(args):
@@ -117,8 +159,9 @@ def parse_options(args):
 
 def main(args):
     options = parse_options(args)
-
-    installers = get_latest_installers(options.base_path, options.compiler, options.release_version, options.feed_type)
+    
+    installer_dirs = get_latest_installer_directories(options.base_path, options.compiler, options.release_version, options.feed_type)
+    installers = get_installer_packages(installer_dirs)
 
     feed_path = build_final_feed_path(options.feed_path, options.feed_version)
     feed = NIPMFeed(feed_path)
@@ -128,6 +171,7 @@ def main(args):
         feed.add_package(installer)
 
     feed.list_packages()
+    generate_feed_metadata(feed_path, installer_dirs)
 
 
 if __name__ == "__main__":
