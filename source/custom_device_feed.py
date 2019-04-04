@@ -49,6 +49,13 @@ def find_latest_directory(base_path):
 
 
 def get_installer_packages(installer_dirs):
+    """
+    Returns a list of nipkg files in the provided directories.
+    
+    :param installer_dirs: List of directories containing nipkgs.
+    :return The list of nipkg files.
+    """
+
     installers = []
     for dir in installer_dirs:
         packages = glob.glob(os.path.join(dir, '*.nipkg'))
@@ -59,6 +66,13 @@ def get_installer_packages(installer_dirs):
 
 
 def get_installer_manifests(installer_dirs):
+    """
+    Returns a list of manifest files in the provided directories.
+    
+    :param installer_dirs: List of directories containing manifests.
+    :return The list of manifest files.
+    """
+
     manifests = []
     for dir in installer_dirs:
         manifest = os.path.join(dir, 'manifest.json')
@@ -98,6 +112,13 @@ def get_latest_installer_directories(directory, compiler, version, feed_type):
 
 
 def generate_feed_metadata(feed_path, dirs):
+    """
+    Creates metadata json file for packages in feed.
+    
+    :param feed_path: Path to the feed.
+    :param dirs: List of directories containing nipkg files.
+    """
+
     metadata = []
     manifests = get_installer_manifests(dirs)
     for manifest in manifests:
