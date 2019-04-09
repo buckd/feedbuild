@@ -1,7 +1,9 @@
 import os
-import subprocess
+from os.path import exists, join, normpath, split, splitext
+from re import search
 from shutil import copyfile
-import re
+from subprocess import check_call
+
 
 class NIPMFeed:
     """
@@ -27,7 +29,7 @@ class NIPMFeed:
         Creates a new feed.
         """
 
-        subprocess.check_call([self.nipkg_path, "feed-create", self.feed_path])
+        check_call([self.nipkg_path, "feed-create", self.feed_path])
 
 
     def open(self, create_if_necessary = False):
@@ -37,7 +39,7 @@ class NIPMFeed:
         :param create_if_necessary: Creates a new feed if one does not exist. Defaults to False.
         """
 
-        if os.path.exists(os.path.join(self.feed_path, "Packages")):
+        if exists(join(self.feed_path, "Packages")):
             return
 
         if not create_if_necessary:
@@ -57,7 +59,7 @@ class NIPMFeed:
         :param overwrite_existing: Specifies whether to overwrite the file at package_destination if it already exists. Default is False.
         """
 
-        if not os.path.exists(package_source):
+        if not exists(package_source):
             raise ValueError('{0} does not exist.'.format(package_source))
         if not package_source.endswith('.nipkg'):
             raise ValueError('{0} is not a valid nipkg file'.format(package_source))
@@ -67,15 +69,15 @@ class NIPMFeed:
         if package_destination:
             package_to_add = package_destination
 
-            if os.path.exists(package_destination):
+            if exists(package_destination):
                 if overwrite_existing:
                     copyfile(package_source, package_destination)
             elif create_package_destination:
-                destination_dir, file_name = os.path.split(package_destination)
+                destination_dir, file_name = split(package_destination)
                 os.makedirs(destination_dir)
                 copyfile(package_source, package_destination)
 
-        subprocess.check_call([self.nipkg_path, "feed-add-pkg", self.feed_path, package_to_add])
+        check_call([self.nipkg_path, "feed-add-pkg", self.feed_path, package_to_add])
 
 
     def remove_package(self, package_name):
@@ -89,7 +91,7 @@ class NIPMFeed:
         if not package_path:
             raise ValueError('Package name {0} does not exist in the feed.'.format(package_name))
 
-        subprocess.check_call([self.nipkg_path, "feed-remove-pkg", self.feed_path, package_path])
+        check_call([self.nipkg_path, "feed-remove-pkg", self.feed_path, package_path])
 
 
     def list_packages(self):
@@ -99,7 +101,7 @@ class NIPMFeed:
 
         print("\nPackages in feed:")
         for package_path in self._get_package_list():
-            print(os.path.normpath(package_path))
+            print(normpath(package_path))
 
 
     def _get_package_list(self):
@@ -110,9 +112,9 @@ class NIPMFeed:
         """
 
         packages = []
-        with open(os.path.join(self.feed_path, "Packages.stamps")) as f:
+        with open(join(self.feed_path, "Packages.stamps")) as f:
             for line in f:
-                package_path = re.search("[0-9 ]+([^\r\n]+)", line).group(1)
+                package_path = search("[0-9 ]+([^\r\n]+)", line).group(1)
                 packages.append(package_path)
         return packages
 
@@ -126,8 +128,8 @@ class NIPMFeed:
         """
 
         for package_path in self._get_package_list():
-            base_path, package_base_name = os.path.split(package_path)
-            package, extension = os.path.splitext(package_base_name)
+            base_path, package_base_name = split(package_path)
+            package, extension = splitext(package_base_name)
             if(package.startswith(package_name)):
                 return package_path
         return None

@@ -2,7 +2,8 @@ import argparse
 import glob
 import json
 import os
-import re
+from os.path import exists, getmtime, join, split
+from re import search
 from NIPMFeed import NIPMFeed
 
 ALL_EXCLUSIONS = []
@@ -17,20 +18,20 @@ def build_final_feed_path(feed_path, feed_version):
     :param feed_path: The base directory for the feed.
     :param feed_version: The base version of the feed.
     """
-    versioned_path = os.path.join(feed_path, feed_version)
+    versioned_path = join(feed_path, feed_version)
 
-    if not os.path.exists(versioned_path):
+    if not exists(versioned_path):
         build_version = 1
     else:
         latest_version = find_latest_directory(versioned_path)
         if not latest_version:
             build_version = 1
         else:
-            build_version = int(re.search("([0-9]+)$", latest_version).group(1))
+            build_version = int(search("([0-9]+)$", latest_version).group(1))
             build_version += 1
 
     final_version = '{0}.{1}'.format(feed_version, build_version)
-    final_path = os.path.join(versioned_path, final_version)
+    final_path = join(versioned_path, final_version)
     return final_path
 
 
@@ -42,10 +43,10 @@ def find_latest_directory(base_path):
     :return The directory that was last modified.
     """
 
-    sub_dirs = glob.glob(os.path.join(base_path, '*'))
+    sub_dirs = glob.glob(join(base_path, '*'))
     if not sub_dirs:
         return None
-    return max(sub_dirs, key=os.path.getmtime)
+    return max(sub_dirs, key=getmtime)
 
 
 def get_installer_packages(installer_dirs):
@@ -58,7 +59,7 @@ def get_installer_packages(installer_dirs):
 
     installers = []
     for dir in installer_dirs:
-        packages = glob.glob(os.path.join(dir, '*.nipkg'))
+        packages = glob.glob(join(dir, '*.nipkg'))
         if packages:
             #there should only be 1 package
             installers.append(packages[0])
@@ -75,8 +76,8 @@ def get_installer_manifests(installer_dirs):
 
     manifests = []
     for dir in installer_dirs:
-        manifest = os.path.join(dir, 'manifest.json')
-        if os.path.exists(manifest):
+        manifest = join(dir, 'manifest.json')
+        if exists(manifest):
             manifests.append(manifest)
     return manifests
 
@@ -99,15 +100,16 @@ def get_latest_installer_directories(directory, compiler, version, feed_type):
     elif feed_type == 'test':
         exclusions = exclusions + TEST_EXCLUSIONS
 
-    base_path = os.path.join(directory, '*')
+    base_path = join(directory, '*')
 
     directories = []
     for sub_dir in glob.glob(base_path):
-        if os.path.split(sub_dir)[1] not in exclusions:
-            latest_path = find_latest_directory(os.path.join(sub_dir, 'export/release/{0}'.format(version)))
-            dir = os.path.join(latest_path, '{0}/installer'.format(compiler))
-            if dir:
-                directories.append(dir)
+        if split(sub_dir)[1] not in exclusions:
+            latest_path = find_latest_directory(join(sub_dir, 'ni/export/release/{0}'.format(version)))
+            if latest_path:
+                dir = join(latest_path, '{0}/installer'.format(compiler))
+                if dir:
+                    directories.append(dir)
     return directories
 
 
@@ -122,13 +124,13 @@ def generate_feed_metadata(feed_path, dirs):
     metadata = []
     manifests = get_installer_manifests(dirs)
     for manifest in manifests:
-        if os.path.exists(manifest):
+        if exists(manifest):
             with open(manifest) as json_file:
                 data = json.load(json_file)
                 metadata.append(data)
 
-    metadata_path = os.path.join(feed_path, 'meta-data/metadata.json')
-    os.mkdir(os.path.join(feed_path, 'meta-data'))
+    metadata_path = join(feed_path, 'meta-data/metadata.json')
+    os.mkdir(join(feed_path, 'meta-data'))
     with open(metadata_path, 'w') as outfile:
         json.dump(metadata, outfile, indent=3)
 
