@@ -19,16 +19,12 @@ def build_final_feed_path(feed_path, feed_version):
     :param feed_version: The base version of the feed.
     """
     versioned_path = join(feed_path, feed_version)
+    build_version = 1
 
-    if not exists(versioned_path):
-        build_version = 1
-    else:
+    if exists(versioned_path):
         latest_version = find_latest_directory(versioned_path)
-        if not latest_version:
-            build_version = 1
-        else:
-            build_version = int(search("([0-9]+)$", latest_version).group(1))
-            build_version += 1
+        if latest_version:
+            build_version += int(search("([0-9]+)$", latest_version).group(1))
 
     final_version = '{0}.{1}'.format(feed_version, build_version)
     final_path = join(versioned_path, final_version)
@@ -193,7 +189,7 @@ def main(args):
     for installer in installers:
         feed.add_package(installer)
 
-    feed.list_packages()
+    feed.print_packages()
     generate_feed_metadata(feed_path, installer_dirs)
 
 

@@ -29,6 +29,9 @@ class NIPMFeed:
         Creates a new feed.
         """
 
+        if not exists(self.feed_path):
+            os.makedirs(self.feed_path)
+
         check_call([self.nipkg_path, "feed-create", self.feed_path])
 
 
@@ -45,7 +48,6 @@ class NIPMFeed:
         if not create_if_necessary:
             raise ValueError('Feed not found.')
 
-        os.makedirs(self.feed_path)
         self.create()
 
 
@@ -69,12 +71,10 @@ class NIPMFeed:
         if package_destination:
             package_to_add = package_destination
 
-            if exists(package_destination):
-                if overwrite_existing:
-                    copyfile(package_source, package_destination)
-            elif create_package_destination:
-                destination_dir, file_name = split(package_destination)
-                os.makedirs(destination_dir)
+            if create_package_destination or overwrite_existing:
+                if not exists(package_destination):
+                    destination_dir, file_name = split(package_destination)
+                    os.makedirs(destination_dir)
                 copyfile(package_source, package_destination)
 
         check_call([self.nipkg_path, "feed-add-pkg", self.feed_path, package_to_add])
@@ -94,17 +94,28 @@ class NIPMFeed:
         check_call([self.nipkg_path, "feed-remove-pkg", self.feed_path, package_path])
 
 
-    def list_packages(self):
+    def print_packages(self):
         """
         Prints a list of all package paths that exist in the feed. Package paths are relative to feed path.
         """
 
         print("\nPackages in feed:")
-        for package_path in self._get_package_list():
+        for package_path in self.get_package_list():
             print(normpath(package_path))
 
 
-    def _get_package_list(self):
+    def package_exists(self, package_name):
+        """
+        Checks if a package exists in the feed.
+        
+        :param package_name: The name of the package to check.
+        :return Whether the package exists in the feed.
+        """
+
+        return self._find_package_path(package_name) is not None
+
+
+    def get_package_list(self):
         """
         Returns a list of all package paths that exist in the feed.
 
@@ -127,10 +138,9 @@ class NIPMFeed:
         :return The path of the package relative to the feed path.
         """
 
-        for package_path in self._get_package_list():
+        for package_path in self.get_package_list():
             base_path, package_base_name = split(package_path)
-            package, extension = splitext(package_base_name)
-            if(package.startswith(package_name)):
+            if package_base_name.startswith(package_name.strip()):
                 return package_path
         return None
 
