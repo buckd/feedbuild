@@ -2,13 +2,16 @@ import argparse
 import glob
 import json
 import os
-from os.path import exists, getmtime, join, split
+from os.path import exists, getmtime, join, split, normpath
 from re import search
 from NIPMFeed import NIPMFeed
+from BuildPublisher import BuildPublisher
 
 ALL_EXCLUSIONS = []
 RELEASE_EXCLUSIONS = ['ni_system_monitor_custom_device']
 TEST_EXCLUSIONS = []
+
+BASE_BUILD_REPORT_API_PATH = "//nirvana/perforceExports/Measurements/daqvv/components/Origin/buildReportAPI/export"
 
 
 def build_final_feed_path(feed_path, feed_version):
@@ -17,18 +20,19 @@ def build_final_feed_path(feed_path, feed_version):
 
     :param feed_path: The base directory for the feed.
     :param feed_version: The base version of the feed.
+    :return The final versioned path and the build number.
     """
     versioned_path = join(feed_path, feed_version)
-    build_version = 1
+    build_number = 1
 
     if exists(versioned_path):
         latest_version = find_latest_directory(versioned_path)
         if latest_version:
-            build_version += int(search("([0-9]+)$", latest_version).group(1))
+            build_number += int(search("([0-9]+)$", latest_version).group(1))
 
-    final_version = '{0}.{1}'.format(feed_version, build_version)
+    final_version = '{0}.{1}'.format(feed_version, build_number)
     final_path = join(versioned_path, final_version)
-    return final_path
+    return final_path, build_number
 
 
 def find_latest_directory(base_path):
@@ -135,42 +139,62 @@ def parse_options(args):
     parser = argparse.ArgumentParser(description='Build an NIPM feed of packages in the provided directory.')
 
     parser.add_argument(
-        '-d', '--directory',
+        '--directory',
         dest="base_path",
         required=True,
         help="The directory containing the custom device exports."
     )
     parser.add_argument(
-        '-c', '--compiler',
+        '--compiler',
         dest="compiler",
         required=True,
         help="The LabVIEW compiler version of the packages to include."
     )
     parser.add_argument(
-        '-r', '--release',
+        '--release',
         dest="release_version",
         required=True,
         help="The release version of the packages to include."
     )
     parser.add_argument(
-        '-f', '--feed_path',
+        '--feed_path',
         dest="feed_path",
         required=True,
         help="The path of the feed to be created."
     )
     parser.add_argument(
-        '-v', '--feed_version',
+        '--feed_version',
         dest="feed_version",
         required=True,
         help="The version of the feed to be created."
     )
     parser.add_argument(
-        '-t', '--feed_type',
+        '--feed_type',
         dest="feed_type",
         default="release",
         choices=["release", "all", "test"],
         help="The type of feed to build."
     )
+    parser.add_argument(
+        '--publish',
+        dest="publish",
+        action='store_true',
+        help="Publish build to Origin."
+    )
+    parser.add_argument(
+        '--no-publish',
+        dest="publish",
+        action='store_false',
+        help="Do not publish build to Origin."
+    )
+    parser.add_argument(
+        '--copy_to_pool',
+        dest="copy_to_pool",
+        action='store_true',
+        help="Copies packages before building feed."
+    )
+
+    parser.set_defaults(publish=True)
 
     options = parser.parse_args()
     return options
@@ -179,18 +203,38 @@ def parse_options(args):
 def main(args):
     options = parse_options(args)
     
-    installer_dirs = get_latest_installer_directories(options.base_path, options.compiler, options.release_version, options.feed_type)
+    installer_dirs = get_latest_installer_directories(options.base_path,
+                                                      options.compiler,
+                                                      options.release_version,
+                                                      options.feed_type)
     installers = get_installer_packages(installer_dirs)
 
-    feed_path = build_final_feed_path(options.feed_path, options.feed_version)
+    feed_path, build_number = build_final_feed_path(options.feed_path, options.feed_version)
     feed = NIPMFeed(feed_path)
     feed.open(create_if_necessary = True)
 
     for installer in installers:
-        feed.add_package(installer)
+        if(options.copy_to_pool):
+            pool_path = normpath(join(options.feed_path, '../pool'))
+            package_name = split(installer)[1]
+            feed.add_package(installer,
+                             package_destination = join(pool_path, package_name),
+                             create_package_destination = True)
+        else:
+            feed.add_package(installer)
+        
 
     feed.print_packages()
     generate_feed_metadata(feed_path, installer_dirs)
+
+    if(options.publish):
+        version_report_dir = find_latest_directory(BASE_BUILD_REPORT_API_PATH)
+        build_report_path = find_latest_directory(version_report_dir)
+        assert build_report_path, 'Build report export not found.'
+
+        publisher = BuildPublisher(build_report_path, options.feed_version,
+                                   build_number, 'VeriStand Custom Devices', 'Windows')
+        publisher.publish(feed_path)
 
 
 if __name__ == "__main__":

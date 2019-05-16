@@ -51,7 +51,10 @@ class NIPMFeed:
         self.create()
 
 
-    def add_package(self, package_source, package_destination = None, create_package_destination = False, overwrite_existing = False):
+    def add_package(self, package_source,
+                    package_destination = None,
+                    create_package_destination = False,
+                    overwrite_existing = False):
         """
         Adds a package to the feed, optionally copying package to a new destination before adding.
 
@@ -74,7 +77,7 @@ class NIPMFeed:
             if create_package_destination or overwrite_existing:
                 if not exists(package_destination):
                     destination_dir, file_name = split(package_destination)
-                    os.makedirs(destination_dir)
+                    os.makedirs(destination_dir, exist_ok=True)
                 copyfile(package_source, package_destination)
 
         check_call([self.nipkg_path, "feed-add-pkg", self.feed_path, package_to_add])
